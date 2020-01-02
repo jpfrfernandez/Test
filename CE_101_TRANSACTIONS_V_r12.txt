@@ -1,0 +1,169 @@
+CREATE OR REPLACE VIEW apps.CE_101_TRANSACTIONS_V
+(row_id, multi_select, bank_account_id, bank_account_name, bank_account_num, bank_name, bank_branch_name, trx_id, trx_type, type_meaning, trx_number, currency_code, amount, bank_account_amount, amount_cleared, gl_date, status_dsp, status, description, trx_date, cleared_date, maturity_date, exchange_rate_date, exchange_rate_type, user_exchange_rate_type, exchange_rate, bank_charges, bank_errors, batch_name, batch_id, agent_name, customer_name, payment_method, vendor_name, customer_id, supplier_id, reference_type_dsp, reference_type, reference_id, actual_amount_cleared, creation_date, created_by, last_update_date, last_updated_by, remittance_number, cash_receipt_id, application_id, count_cleared, bank_currency_code, trx_currency_type, code_combination_id, period_name, journal_entry_name, document_number, journal_entry_line_number, clearing_trx_type, journal_category, base_amount, receipt_class_id, receipt_method_id, receipt_class_name, deposit_date, reversed_receipt_flag, check_number, value_date, ce_bank_acct_use_id, legal_entity_id, org_id, pson)
+AS
+SELECT
+    /*+ leading(aba branchparty bankparty ccid jel) use_nl(ccid) index(jel GL_JE_LINES_N1) */
+    jel.ROWID ,
+    'N' ,
+    aba.bank_account_id ,
+    aba.bank_account_name ,
+    aba.bank_account_num ,
+    bankparty.party_name ,
+    branchparty.party_name ,
+    jel.je_line_num ,
+    DECODE(DECODE(NVL(jel.entered_dr, 0),0, NVL (jel.accounted_dr, 0),jel.entered_dr),0,'PAYMENT','CASH') ,
+    l2.meaning ,
+    jel.description ,
+    jeh.currency_code ,
+    DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr,0)),0,jel.entered_cr,jel.entered_dr) ,
+    DECODE(jeh.currency_code,sob.currency_code,DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr, 0)),0,jel.entered_cr,jel.entered_dr), aba.currency_code,DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr, 0)),0, jel.entered_cr,jel.entered_dr), DECODE(NVL(jel.accounted_dr,0),0,jel.accounted_cr,jel.accounted_dr)) ,
+    TO_NUMBER (NULL) ,
+    jel.effective_date ,
+    l1.meaning ,
+    jel.status ,
+    jel.description ,
+    jel.effective_date ,
+    TO_DATE (NULL) ,
+    TO_DATE (NULL) ,
+    jeh.currency_conversion_date ,
+    jeh.currency_conversion_type ,
+    glcc.user_conversion_type ,
+    jeh.currency_conversion_rate ,
+    TO_NUMBER (NULL) ,
+    TO_NUMBER (NULL) ,
+    jeb.NAME ,
+    jeb.je_batch_id ,
+    NULL ,
+    NULL ,
+    NULL ,
+    NULL ,
+    TO_NUMBER (NULL) ,
+    TO_NUMBER (NULL) ,
+    NULL ,
+    NULL ,
+    TO_NUMBER (NULL) ,
+    DECODE(cre.status_flag,'M',DECODE (jeh.currency_code, sob.currency_code,DECODE(NVL(jel.entered_dr,0),0,jel.entered_cr,jel.entered_dr), aba.currency_code,DECODE(NVL(jel.entered_dr,0),0,jel.entered_cr,jel.entered_dr), DECODE(NVL(jel.entered_dr,0),0,jel.accounted_cr,jel.accounted_dr))) ,
+    jel.creation_date ,
+    jel.created_by ,
+    jel.last_update_date ,
+    jel.last_updated_by ,
+    NULL ,
+    jeh.je_header_id ,
+    101 ,
+    0 ,
+    aba.currency_code ,
+    DECODE (jeh.currency_code,sob.currency_code, 'FUNCTIONAL',aba.currency_code, 'BANK','FOREIGN') ,
+    jel.code_combination_id ,
+    jel.period_name ,
+    jeh.NAME ,
+    jeh .doc_sequence_value ,
+    jel.je_line_num ,
+    'JE_LINE' ,
+    jec.user_je_category_name ,
+    DECODE (NVL (jel.entered_dr, NVL (jel.accounted_dr, 0)),0, jel.accounted_cr,jel.accounted_dr) ,
+    TO_NUMBER (NULL) ,
+    TO_NUMBER (NULL) ,
+    NULL ,
+    TO_DATE (NULL) ,
+    NULL ,
+    TO_NUMBER (NULL) ,
+    TO_DATE (NULL) ,
+    TO_NUMBER (NULL) ,
+    TO_NUMBER (NULL) ,
+    TO_NUMBER (NULL),
+    TO_CHAR(NULL)
+  FROM gl.gl_daily_conversion_types glcc,
+    gl.gl_je_lines jel,
+    apps.ce_lookups l2,
+    apps.gl_lookups l1,
+    gl.gl_ledgers sob,
+    ce.ce_system_parameters SYS,
+    ce.ce_statement_reconcils_all cre,
+    apps.gl_je_categories jec,
+    gl.gl_je_batches jeb,
+    gl.gl_je_headers jeh,
+    ce.ce_bank_accounts aba,
+    apps.hz_parties bankparty,
+    apps.hz_parties branchparty,
+    gl.gl_period_statuses gps,
+    (SELECT
+      /*+ merge index(cbu CE_BANK_ACCT_USES_N1) */
+      cbu.bank_account_id,
+      cgl.ap_asset_ccid code_combination_id,
+      cbu.end_date
+      /* Bug 17445765: Added */
+    FROM ce.ce_bank_acct_uses_all cbu,
+      ce.ce_gl_accounts_ccid cgl
+    WHERE cgl.bank_acct_use_id = cbu.bank_acct_use_id
+    AND cbu.ap_use_enable_flag = 'Y'
+    UNION
+    SELECT
+      /*+ merge index(cbu CE_BANK_ACCT_USES_N1) */
+      cbu.bank_account_id,
+      cgl.ar_asset_ccid code_combination_id,
+      cbu.end_date
+      /* Bug 17445765: Added */
+    FROM ce.ce_bank_acct_uses_all cbu,
+      ce.ce_gl_accounts_ccid cgl
+    WHERE cgl.bank_acct_use_id = cbu.bank_acct_use_id
+    AND cbu.ar_use_enable_flag = 'Y'
+    UNION
+    SELECT
+      /*+ merge index(cba CE_BANK_ACCOUNTS_U1) */
+      cba.bank_account_id,
+      cba.asset_code_combination_id code_combination_id,
+      cba.end_date
+      /* Bug 17445765: Added */
+    FROM ce.ce_bank_accounts cba
+    ) ccid
+  WHERE glcc.conversion_type           = jeh.currency_conversion_type
+  AND ccid.bank_account_id             = aba.bank_account_id
+  AND l2.lookup_type                   = 'TRX_TYPE'
+  and l2.lookup_code                   = decode (decode (nvl (jel.entered_dr, 0),0, nvl (jel.accounted_dr, 0),jel.entered_dr),0, 'JE_CREDIT','JE_DEBIT')
+  and ( (decode(nvl(jel.entered_dr, 0), 0, nvl(jel.accounted_dr, 0), jel.entered_dr) = 0 OR
+     DECODE(NVL(jel.entered_cr, 0), 0, NVL(jel.accounted_cr, 0), jel.entered_cr) = 0) )
+  AND l1.lookup_type                   = 'MJE_BATCH_STATUS'
+  AND l1.lookup_code                   = jel.status
+  AND aba.account_classification       = 'INTERNAL'
+  AND NVL (aba.netting_acct_flag, 'N') = 'N'
+  AND sob.object_type_code             = 'L'
+  AND NVL (sob.complete_flag, 'Y')     = 'Y'
+  AND jeh.currency_code                = DECODE (aba.currency_code, sob.currency_code , jeh.currency_code,aba.currency_code)
+  AND aba.bank_branch_id               = branchparty.party_id
+  AND aba.bank_id                      = bankparty.party_id
+  AND aba.account_owner_org_id         = SYS.legal_entity_id
+  AND jec.je_category_name             = jeh.je_category
+  AND jeb.je_batch_id                  = jeh.je_batch_id
+  AND jeh.je_header_id                 = jel.je_header_id
+  AND jeh.je_source NOT               IN ('Payables', 'Receivables', 'AP Translator', 'AR Translator',/*'Treasury', */'Cash Management', 'Payroll', 'Consolidation','Move/Merge')
+  AND ''
+    || jel.status(+)          = 'P'
+  AND jel.code_combination_id = ccid.code_combination_id
+  AND jel.period_name         = gps.period_name
+  AND gps.application_id      = 101
+  AND gps.set_of_books_id     = sob.ledger_id
+  AND sob.ledger_id           = SYS.set_of_books_id
+  AND jel.ledger_id           = SYS.set_of_books_id
+  AND jel.effective_date     >= SYS.cashbook_begin_date
+  AND jel.effective_date     <= NVL(ccid.end_date, jel.effective_date)
+  and jel.effective_date     >= to_date('01/09/2018', 'dd/mm/yyyy')
+    /* Bug 17445765: Added */
+  AND jeb.actual_flag = 'A'
+  AND je_category    <> 'Revaluation'
+  AND EXISTS
+    (SELECT
+      /*+ push_subq cardinality(bau 10) no_unnest */
+      1
+    FROM ce.ce_bank_acct_uses_all bau,
+      ce.ce_security_profiles_gt ou
+    WHERE aba.bank_account_id = bau.bank_account_id
+    AND ( (bau.org_id         = ou.organization_id
+    AND ou.organization_type IN ('OPERATING_UNIT', 'BUSINESS_GROUP'))
+    OR (bau.legal_entity_id   = ou.organization_id
+    AND ou.organization_type  = 'LEGAL_ENTITY'))
+    )
+  AND cre.je_header_id(+)                = jel.je_header_id
+  AND cre.reference_id(+)                = jel.je_line_num
+  AND cre.reference_type(+)              = 'JE_LINE'
+  and nvl (cre.status_flag, 'U')         = 'U'
+  AND NVL (cre.current_record_flag, 'Y') = 'Y';
