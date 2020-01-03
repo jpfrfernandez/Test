@@ -18,7 +18,7 @@ SELECT
     DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr,0)),0,jel.entered_cr,jel.entered_dr) ,
     DECODE(jeh.currency_code,sob.currency_code,DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr, 0)),0,jel.entered_cr,jel.entered_dr), aba.currency_code,DECODE(NVL(jel.entered_dr,NVL(jel.accounted_dr, 0)),0, jel.entered_cr,jel.entered_dr), DECODE(NVL(jel.accounted_dr,0),0,jel.accounted_cr,jel.accounted_dr)) ,
     TO_NUMBER (NULL) ,
-    jel.effective_date ,
+    --jel.effective_date ,
     l1.meaning ,
     jel.status ,
     jel.description ,
